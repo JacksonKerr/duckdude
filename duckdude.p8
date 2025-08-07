@@ -7,7 +7,7 @@ function newplr(ix,iy,s,dir)
 		x=ix,
 		y=iy,
 		
-		x_accel=1,
+		x_accel=0.5,
 		x_decel=0.5,
 		vmax=2,
 		
@@ -28,51 +28,6 @@ function newplr(ix,iy,s,dir)
 	}
 end
 
---used to paint the backgrounds
---of building interiors
-function setup_buildings()
-	build_bkg={
-		{--left cream aprtmt interior
-			x1=140,y1=164,x2=188,y2=236,
-			clr=13
-		},
-		{--red brick tower interior
-			x1=204,y1=60,x2=276,y2=236,
-			clr=13
-		},
-		{--bank exterior
-			x1=849,y1=456,x2=934,y2=487,
-			clr=7
-		},
-		{--btm roof fill
-			x1=872,y1=448,x2=911,y2=455,
-			clr=7
-		},
-		{--mid roof fill
-			x1=880,y1=440,x2=903,y2=447,
-			clr=7
-		},
-		{--top roof fill
-			x1=888,y1=432,x2=895,y2=439,
-			clr=7
-		},
-		{--bank interior
-			x1=849,y1=200,x2=934,y2=231,
-			clr=15
-		},
-		{--bp exterior
-			x1=640,y1=456,x2=703,y2=487,
-			clr=11
-		},
-		{--bp interior
-			x1=654,y1=200,x2=703,y2=231,
-			clr=15
-		},
-	}
-end
-
-
-
 function setup_io()
 	prev_io={
 		⬆️=false,⬇️=false,⬅️=false,
@@ -80,11 +35,56 @@ function setup_io()
 	}
 end
 
+local repeat_events={}
+function add_repeat_event(f,rs)
+	add(
+		repeat_events,
+		{func=f,repeats=rs}
+	)
+end
+function run_repeat_events()
+	for i=1,count(repeat_events) do
+		repeat_events[i].func(
+			repeat_events[i].repeats
+		)
+		repeat_events[i].repeats-=1
+		if repeat_events[i].repeats<1
+		then 
+			del(
+				repeat_events,
+				repeat_events[i]
+			) 
+		end
+	end
+end
+
+local wait_events={}
+function add_wait_event(f,time_)
+	add(
+		wait_events,
+		{func=f,time_=time_}
+	)
+end
+function run_wait_events()
+	for i=1,count(wait_events) do
+		wait_events[i].time_-=1
+		if wait_events[i].time_<1
+		then
+			wait_events[i].func()
+			del(
+				wait_events,
+				wait_events[i]
+			) 
+		end
+	end
+end
+
 function _init()
 	printh("loaded")
-	setup_buildings()
 	
-	p=newplr(24,196,
+	bus_enabled=false
+	
+	p=newplr(32,196,
 		{77,78,79},"➡️")
 	
 
@@ -93,11 +93,10 @@ function _init()
 	setup_io()
 
 	cam_x=0
-	cam_y=128--384 for outdoors
+	cam_y=115--384 for outdoors
+	
+	do_wipe(true)
 end
-
-
-
 -->8
 -- collision
 function movex(nx,o)
@@ -120,8 +119,6 @@ end
 
 function movey(ny, o)
 	local sign=1 if (ny<0) sign=-1
-	// todo if head is donked set
-	// dy to 0
 	local dy=abs(ny)
 	while dy>0 do
 		local newy=flr(o.y+sign)
@@ -287,22 +284,19 @@ function shwall(x, y)
 	return ret
 end
 -->8
---transition
-function indrs(o)
-	if (o.y<250) return true
-	return false
-end
+-- player
+function upd_plr(o) 
+	handle_dx(o) 
+	handle_dy(o)
+		 
+	if btn(❎) and not prev_io.❎
+		then next_dialog(o) end
+		
+	movey(o.dy,o)
+end	
 
-function indr_tog(o)
-	if indrs(o) then o.y+=256
-	else o.y-=256 end
-end
--->8
--- update
-function upd_chr(o) 
-	-- tempref: only do button
-	-- stuff for player
-	if btn(➡️) then
+function handle_dx(o) 
+		if btn(➡️) then
 		if (o.x_accel > o.dx) o.dx=0
 		if (o.dx<o.vmax) o.dx+=o.x_accel
 	elseif btn(⬅️) then
@@ -313,40 +307,92 @@ function upd_chr(o)
 		if (o.dx<0) o.dx+=o.x_decel
 	end
 	movex(o.dx,o)
+end
 
+function handle_dy(o)
 	if o.dy<o.terminal_velocity
 		then o.dy+=o.gravity	end
-	if o.grounded then o.dy=0.001 end
-	
+	if (o.grounded) o.dy=0.001 
 
 	if btn(⬆️) and o.grounded 
 		and not prev_io.⬆️
 		then	o.dy=o.jump_accel	end
 	if not prev_io.🅾️ and btn(🅾️)
 		 then		indr_tog(o) end
-		 
-	if btn(❎) and not prev_io.❎
-		then next_dialog(o) end
-		
-	
-	movey(o.dy,o)
-end	
-
-frame_count=0
-function _update()
-	frame_count+=1
-	frame_count%=30
-	--if (frame_count%4==1) or true
-	--then	upd_duck() end
-	upd_chr(p)
-	
-	prev_io.⬆️=btn(⬆️)
-	prev_io.⬇️=btn(⬇️)
-	prev_io.⬅️=btn(⬅️)
-	prev_io.➡️=btn(➡️)
-	prev_io.❎=btn(❎)
-	prev_io.🅾️=btn(🅾️)
 end
+
+--transition
+function indrs(o)
+	if (o.y<250) return true
+	return false
+end
+
+function indr_tog(o)
+	bus_stop={
+		x1=13*8,y1=27*8,
+		x2=(15*8)+7,y2=(28*8)+7,
+	}
+	if (
+		bus_enabled
+		and o.x>=bus_stop.x1
+		and o.y>=bus_stop.y1
+		and o.x<=bus_stop.x2
+		and o.y<=bus_stop.y2
+	) then
+		screen_wipe(
+			function() 
+				o.x=2*8 o.y=59*8
+				o.dir="⬅️"
+			end
+		)
+		return
+	end
+	
+	-- center point of object
+ mx=(o.x+4)/8	my=(o.y+4)/8
+	if	fget(mget(mx,my),6) then
+		screen_wipe(
+			function() 
+				if indrs(o) then o.y+=256
+				else o.y-=256 end
+			end
+		)
+	end
+end
+-->8
+--ui
+ui_elms={
+	id={
+		shown=false,
+		expired=true,
+		f=function()
+			local sx=cam_x+82
+			local sy=cam_y+106
+			local br={x=sx+43,y=sy+19}
+			
+			rectfill(sx,sy,br.x,br.y,15)
+			line(br.x+1,sy,br.x+1,br.y,6)
+			line(sx,br.y+1,br.x+1,br.y+1,6)
+			spr(100,sx+2,sy+2)
+			spr(116,sx+2,sy+10)
+			print("M.OXLONG",sx+11,sy+1,0)
+			local exp_txt="EXP:NO"
+			if (ui_elms.id.expired) then
+				exp_txt..="W"
+			end
+			print(exp_txt,sx+11,sy+7,0)
+			print("SEX:YES",sx+11,sy+13,0)
+		end,
+	}
+}
+
+function draw_ui()
+	for k,elm in pairs(ui_elms) do
+		if (elm.shown) elm.f()
+	end
+end
+
+
 -->8
 --camera
 function update_camera(o)
@@ -358,13 +404,9 @@ function update_camera(o)
 	
 	x_cam_bnds=function (old_x,x)
 		if (x<0) return 0
-
-		if indrs(o) then
-			if (x<128) then
-				if indrs(o) and old_x>=128
-					then return 128 end
-				return 0 
-			end
+		if indrs(o) and x<128 then
+			if (old_x>=128) return 128
+			return 0
 		end
 		return x
 	end
@@ -377,9 +419,9 @@ function update_camera(o)
 		new_x=flr(cam_x+(delt_x/smth))
 		new_x=x_cam_bnds(cam_x,new_x)
 	end
-	cam_x=new_x
+	cam_x=flr(new_x)
 	
-		y_cam_bnds=function (y) 
+	y_cam_bnds=function (y) 
 		if indrs(o) then
 			if (128<y)	return 128
 		elseif (384<y)	then
@@ -387,57 +429,79 @@ function update_camera(o)
 		end
 		return y
 	end
-
-
+	
 	if (delt_y>80)	then
 		--snap on large camera move 
-		new_y=cam_y+delt_y
+		new_y=y_cam_bnds(
+			cam_y+delt_y
+		)
 	else
 		if (cam_y>new_y) delt_y*=-1
 		new_y=flr(cam_y+(delt_y/smth))
 		new_y=y_cam_bnds(new_y)
 	end
-	cam_y=new_y
+	cam_y=flr(new_y)
 	
 	camera(cam_x,cam_y)
 end
 -->8
 --dialogue & npcs
 function new_npc(
-	ix,iy,dir,name,s,dialog
+	ix,iy,dir,name,
+	idle_s,yap_s,
+	dialog,
+	pre_dlg_actn,post_dlg_actn
 )
 	return {
 		name=name,
-		x=ix,
-		y=iy,
+		x=ix,y=iy,
 		dir=dir,
-		cs=s[1],
-		s=s,
-		dialog=dialog
+		cs=idle_s,
+		idle_s=idle_s,
+		yap_s=yap_s,
+		dialog=dialog,
+		pre_dlg_actn=pre_dlg_actn,
+		post_dlg_actn=post_dlg_actn,
 	}
 end
 
 function setup_npcs()
 	seg=new_npc(100,182,"⬅️",
-		"sam the seagul",{110,111},
+		"sam the seagul",110,111,
 		{
 			[[hi dan, how's things?]],
 			[[you applied for planning permission for that project yet?]],
 			[[well, the council should still be open today.]],
 			[[the bus is about to swing past. there's no time like the present.]],
-		}
+		},
+		nil,
+		spoke_to_seagul
 	)
 	
 	kkereru=new_npc(60,480,"⬅️",
-		"kevin the kereru",{92,93},
+		"kevin the kereru",92,93,
 		{
 			[[oi, you! did the bus just come past?]],
-			[[gah! not again!!!]],
-		}
+			[[...]],
+			[[aw man, i'm gonna be late for dinner 😐]]
+		},
+		nil,
+		function() 
+			screen_wipe(
+				function()
+					kkereru.x=2*8	
+					kkereru.y=(59*8)+4	
+					kkereru.dialog={
+						[[guess i'll have to wait for the next one...]]
+					}
+					kkereru.post_dlg_actn=nil
+				end
+			)
+		end
 	)
 
 	jmal=new_npc(264,220,"⬅️",
-		"john mallard",{94,95},
+		"john mallard",94,95,
 		{
 			[[hi, welcome to o.r.c. what are you after?]],
 			[[ok, let's see. the next open appointment is on...]],
@@ -457,48 +521,63 @@ function setup_npcs()
 			[[and don't call me shirley]],
 			[[well...]],
 			[[i suppose i can let it slide this one time...]],
-			[[head up to the fifth floor, sam sparrow will be waiting.]],
-		}
+			[[head up to the fifth floor, simon the sparrow will be waiting.]],
+		},
+		nil,
+		given_appointment
 	)
 	sspar=new_npc(264,92,"⬅️",
-		"sam sparrow",{126,127},
-		{
-			[[hya, please take a seat---]],
-			[[righty oh, doing a bit of d.i.y. are we? we'll see about that]],
-			[[what did you have in mind?]],
-			[[...]],
-			[[well, it's ambitious but should be perfectly permissable, and you seem to have all the paperwork in order.]],
-			[[i'll just need to see you i.d. then you can sign here.]],
-			[[*passes i.d.*]],
-			[[ok great, just sign here ple--]],
-			[[uh...]],
-			[[...]],
-			[[this id is out of date...]],
-			[[listen here, i'm no pencil pushing bureaucrat like that fool downstairs but this simply won't do.]],
-			[[now, i'll be honest. i was about clock out. it's already 10:30AM after all, but if you hurry down to to the v.t.n.z at the end of the street you should be able to get it renewed. i'll stick around for another few minutes just for you.]],
-			[[hurry along now.]],
-		}
+		"simon the sparrow",126,127,
+		{[[...]],}
 	)
-	ppukeko=new_npc(752,480,"➡️",
-		"percy pukeko",{124,125},
+	ppukeko=new_npc(800,480,"⬅️",
+		"percy the pukeko",124,125,
 		{
 			[[sorry mate, v.t.n.z's closed for smoko.]],
+		}
+	)
+	ppidgeon=new_npc(665,220,"➡️",
+		"polly the pidgeon",108,109,
+		{
+			[[give me a minute bro, we've just opened.]],
+		}
+	)
+	
+	jmoa=new_npc(806,214,"⬅️",
+		"jason da-moa",75,76,
+		{[[...]]}
+	)
+	
+	bpellican=new_npc(
+		48*8,19*8+4,"⬅️",
+		"big bill",73,74,
+		{
 			[[...]],
-			[[in a hurry aye? well, get me a steak n' cheese from the servo next-door and i'll help you out.]],
+		}
+	)
+	
+	kkiwi=new_npc(
+		58*8,27*8+4,"⬅️",
+		"kelly the kiwi",122,123,
+		{
+			[[hya, welcome to specsavers.]],
+			[[just here for a browse? sweet as. feel free to have a look around.]],
 		}
 	)
 	
 	npcs={ seg,kkereru,jmal,sspar,
-		ppukeko }
+		ppukeko,ppidgeon,jmoa,kkiwi,
+		
+		bpellican,
+	}
 end
 
 dlg_npc=nil
-dlg_line=1
+dlg_ln=1
 function draw_dialog()
 	-- dialog
 	if (dlg_npc==nil) return
 
-	
 	--print nameplate
 	rectfill(
 		cam_x+1,cam_y+1,
@@ -512,13 +591,13 @@ function draw_dialog()
 	)
 
 	local l=
-		dlg_npc.dialog[dlg_line]
+		dlg_npc.dialog[dlg_ln]
 	local max_len=30
 	local up_to=1
 	local p_to=up_to+max_len+1
 	local text_y=cam_y+8
 	while up_to<#l do
-		if (sub(l,up_to,1)==" ") then
+		while sub(l,up_to,1)==" " do
 			up_to+=1 
 		end
 		
@@ -537,37 +616,330 @@ function draw_dialog()
 		text_y+=7
 		up_to=p_to+1
 	end
-	printh("exited loop")
 end
 
 function next_dialog(o)
+	local try_f=function(f)
+		if (f!=nil)	then
+			printh("run") 
+			f()
+		end
+	end
+
 	local r=25
 	if dlg_npc!=nil then
-		dlg_line+=1
-		if dlg_line>
-			count(dlg_npc.dialog)
-		then dlg_npc=nil
+		dlg_ln+=1
+		if dlg_ln>count(dlg_npc.dialog)
+		then
+			local f=dlg_npc.post_dlg_actn
+			try_f(f)
+			dlg_npc=nil	
 		end
 	else
 		for npc in all(npcs) do
 			if abs(npc.x-o.x)<r
 				and abs(npc.y-o.y)<r then
+					local f=npc.pre_dlg_actn
+					npc.pre_dlg_actn=nil
+					try_f(f)
 					dlg_npc=npc
-					dlg_line=1
+					dlg_ln=1
 					return
 			end
 		end
 	end
 end
 
+function spoke_to_seagul()
+	bus_enabled=true
+	seg.dialog={
+		[[the bus is almost here! you better get to the bus stop!]],
+	}
+end
 
+function given_appointment()
+	// open office door
+	mset(28, 11, 44)
+	mset(28, 12, 60)
+	
+	jmal.dialog={
+		[[well, off you go then. he's up on the fifth floor.]]
+	}
+	sspar.dialog={
+		[[hya, please take a seat---]],
+		[[righty oh, doing a bit of d.i.y. are we? we'll see about that]],
+		[[what did you have in mind?]],
+		[[...]],
+		[[well, it's ambitious but should be perfectly permissable, and you seem to have all the paperwork in order.]],
+		[[i'll just need to see your i.d. then you can sign here.]],
+	}
+	sspar.post_dlg_actn=pass_id
+end
 
+function pass_id()
+	sspar.pre_dlg_actn=
+			function() 
+				ui_elms.id.shown=true
+			end
+	sspar.dialog={
+		[[*passes i.d.*]],
+		[[ok great, just sign here ple--]],
+		[[uh...]],
+		[[...]],
+		[[this id is out of date...]],
+		[[listen here, i'm no pencil pushing bureaucrat like that fool downstairs but this simply won't do.]],
+		[[now, i'll be honest. i was about clock out. it's already 10:30AM after all...]],
+		[[but if you hurry down to to the v.t.n.z at the end of the street you should be able to get it renewed fairly quickly.]],
+		[[i'll stick around for another few minutes just for you.]],
+		[[hurry along now.]],
+	}
+	sspar.post_dlg_actn=
+		setup_pukeko_lines
+end
+
+function setup_pukeko_lines()
+		ui_elms.id.shown=false
+		sspar.dialog={
+			[[go on, get a move on down to v.t.n.z then. i'm keen to knock off.]]
+		}
+		ppukeko.dialog={
+			[[sorry mate, v.t.n.z's closed for smoko.]],
+			[[...]],
+			[[in a hurry aye? well, get me a steak n' cheese from the servo next-door and i'll help you out.]],
+		}
+		ppukeko.post_dlg_actn=
+				setup_servo_lines
+end
+
+function setup_servo_lines()
+	ppidgeon.dialog={
+		[[hya mate, what can i do ya for?]],
+		[[...]],
+		[[sweet as, here you go]],
+		[[*new trade deal made*]],
+		[[*aquired*: one 'steak' and cheese pie]],
+	}
+	ppidgeon.post_dlg_actn=
+		setup_vtnz_dialog
+end
+
+function setup_vtnz_dialog()
+	ppidgeon.dialog={
+		[[sorry mate, that was the last one in the warmer.]],
+	}
+	ppukeko.dialog={
+		[[cheers mate, i'll see you inside...]],
+	}
+	ppukeko.post_dlg_actn=
+		give_pukeko_pie
+end
+
+function give_pukeko_pie()
+	screen_wipe(
+		function() 
+			// move pukeko inside.
+			ppukeko.x=(95*8+3)
+			ppukeko.y=27*8
+			
+			// open vtnz door
+			mset(92,59,12)
+			mset(92,60,28)
+			ppukeko.post_dlg_actn=nil
+		end
+	)
+	
+	ppukeko.dialog={
+		[[ah, a licence renewal. you'll want to talk to jason the moa in the office.]],
+		[[thanks for the pie!]],
+	}
+		
+	// setup moa doalog.
+	jmoa.dialog={
+			[[percy tells me you need your id renewed.]],
+			[[...]],
+			[[yes, yes, that's me. the acting work has been a bit slow after the whole garett "the garbage man" thing.]],
+			[[...]],
+			[[yeah, and this joke doesen't even work because jason mamoa's hawaiian and i'm an extinct new zealand bird. can we just forget about it?]],
+			[[anyway...]],
+			[[unfortunately you're due an eye test so before i renew this, you'll have to pay a visit to specsavers.]],
+			[[cya.]],
+	}
+	jmoa.post_dlg_actn=
+		setup_specsavers
+end
+
+function setup_specsavers()
+	jmoa.dialog={
+			[[got those eye test results yet? no? well head down to specsavers. i can't renew this without it.]],
+	}
+	kkiwi.dialog={
+		[[sup horn?]],
+		[[...]],
+		[[oh, sorry...]],
+		[[i mean welcome to specsavers. how can i help you?]],
+		[[..]],
+		[[well then, join me upstairs and we'll get started.]],
+	}
+	kkiwi.post_dlg_actn=
+		setup_eye_test
+end
+
+function setup_eye_test()
+	//after moa, setup kiwi in
+	//specsavers
+	kkiwi.dialog={
+		[[alright, what do you see?]],
+		[[ok, ok]],
+		[[which is better?]],
+		[[left?]],
+		[[or right?]],
+		[[left?]],
+		[[or right?]],
+	}
+	screen_wipe(
+		function() 
+			kkiwi.x=54*8
+			kkiwi.y=23*8+4
+		end
+	)
+end
+-->8
+--map detail
+build_bkg={
+	{--cream aprtmt interior
+		x1=18*8,y1=52*8,x2=23*8,y2=61*8,
+		clr=15
+	},
+	{--cream aprtmt interior
+		x1=140,y1=160,x2=188,y2=236,
+		clr=13
+	},
+	{--red brick tower interior
+		x1=204,y1=60,x2=276,y2=236,
+		clr=13
+	},
+	{--mall exterior
+		x1=38*8,y1=45*8,x2=49*8,y2=61*8,
+		clr=15
+	},
+	{--mall exterior2
+		x1=49*8,y1=51*8,x2=59*8,y2=61*8,
+		clr=15
+	},
+	{--mall interior
+		x1=38*8,y1=13*8,x2=49*8,y2=29*8-1,
+		clr=13
+	},
+	{--specsavers interior
+		x1=50*8-4,y1=19*8,x2=59*8,y2=29*8-1,
+		clr=13
+	},
+	{--bp exterior
+		x1=640,y1=456,x2=703,y2=487,
+		clr=11
+	},
+	{--bp interior
+		x1=654,y1=200,x2=703,y2=231,
+		clr=15
+	},
+	{--vtnz exterior
+		x1=729,y1=424,x2=830,y2=487,
+		clr=9
+	},
+	{--garage door border
+		x1=94*8-1,y1=55*8-1,x2=99*8,y2=61*8-1,
+		clr=4,
+	},
+	{--vtnz exterior garage black
+		x1=94*8+1,y1=59*8,x2=99*8-1,y2=61*8-1,
+		clr=0
+	},
+	{--vtnz interior lane
+		x1=736,y1=176,x2=791,y2=231,
+		clr=9
+	},
+	{--vtnz interior staffroom
+		x1=800,y1=176,x2=823,y2=199,
+		clr=13
+	},
+	{--vtnz interior office
+		x1=792,y1=208,x2=823,y2=231,
+		clr=3
+	},
+	{--vtnz office desk
+		x1=808,y1=224,x2=824,y2=231,
+		clr=9
+	},
+}
+
+foreground={
+ {--mall shadesail
+		x1=38*8,y1=57*8-1,x2=50*8-1,y2=58*8-3,
+		clr=1
+	},
+	{
+		x=41*8+1,y=57*8,
+		clr=7,
+		text="mall"
+	},
+	{--specsavers shadesail
+		x1=51*8,y1=57*8-1,x2=59*8-1,y2=58*8-3,
+		clr=3
+	},
+	{
+		x=51*8+1+12,y=57*8,
+		clr=7,
+		text="specsavers"
+	},
+	
+	{
+		x=91*8+3,y=53*8+1,
+		clr=7,
+		text="v.t.n.z."
+	},
+	{--vtnz door lft interior shdw
+		x1=92*8,y1=59*8,x2=92*8,y2=61*8-1,
+		clr=5
+	},
+}
+
+function open_sparrow_door()
+
+end
+
+-->8
+--update
+frame_count=0
+function _update()
+	frame_count+=1
+	frame_count%=30
+	
+	upd_plr(p)
+	
+	prev_io={
+		⬆️=btn(⬆️),
+		⬇️=btn(⬇️),
+		⬅️=btn(⬅️),
+		➡️=btn(➡️),
+		❎=btn(❎),
+		🅾️=btn(🅾️),
+	}
+	
+	for npc in all(npcs) do
+		npc.cs=npc.idle_s
+		if dlg_npc!=nil 
+			and frame_count%15<10
+			and dlg_npc.cs==
+				dlg_npc.idle_s then
+					dlg_npc.cs=dlg_npc.yap_s
+		end
+	end
+end
 -->8
 -- draw
 function draw_spr(o)
 	local flipx=o.dir=="⬅️"
-	spr(o.cs,
-		o.x, o.y, 1, 1, flipx)
+	spr(o.cs,o.x,o.y,1,1,flipx)
 end
 
 function draw_plr(o)
@@ -583,13 +955,41 @@ function draw_plr(o)
 		o.x,o.y,1,1,flipx)
 end
 
-function drw_bkgrnds()
-	for b in all(build_bkg)	do
+function drw_details(details)
+	for b in all(details)	do
+		if (b.text!=nil) then
+			print(b.text,b.x,b.y,b.clr)
+		else
 		rectfill(
 			b.x1,b.y1,
 			b.x2,b.y2, b.clr
 		)
+		end
 	end
+end
+
+function do_wipe(out)
+	local t_len=16
+	add_repeat_event(
+		function(t)
+			local r=t/t_len*128
+			if (not out) r=128-r
+			circfill(p.x+4,p.y+4,r,0) 
+		end,
+		t_len
+	)
+end
+function screen_wipe(fmid)
+	--todo: prevent input during
+	--screen wipe
+	do_wipe(false)
+	add_wait_event(
+		function()
+			fmid()
+			do_wipe(true)
+		end,
+		16
+	)
 end
 
 function _draw() 
@@ -602,18 +1002,24 @@ function _draw()
 		cam_x+127,cam_y+127, 
 		12
 	)
-	drw_bkgrnds()
+	drw_details(build_bkg)
 	map(0,0,0,0,127,127)
-	
-	draw_plr(p)
+	drw_details(foreground)
 	
 	for npc in all(npcs) do
 		draw_spr(npc)
 	end
 	
+	draw_plr(p)
 	draw_dialog()
 	
+	run_repeat_events()
+	run_wait_events()
+	
 	update_camera(p)
+	
+	draw_ui()
+	printh(sspar.post_dlg_actn)
 end
 __gfx__
 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee1eeeeeeee1eeeeeeeeeeeeeee66663333333b6666444444445555555555555555656666663b3333b3b33b333b
@@ -624,62 +1030,62 @@ eeeeeeee446ee444e555555e66f5555feee11446eee11eee44411eeeeeeeeeee43b11113b11113b6
 eeeeeeee44444644e666666e66ffffffee116666ee1111ee666611eeeeeeeeee3b111113b111113b444444445411411556111115111111114544444456516611
 eeeeeeee44464444e6eeee6e6ff77f8fe1144464e114411e4464411e111111113b111113b111113b444444445444444556111115111111114444454411651156
 eeeeeeeee444444ee6eeee6ee565656e116444641164441144644411111111113b111113b111113b444444445464444556111115111111114444444415665166
-eee55eeeeeeeee1144444444eee886eee6666666666666666666666066666666333333333333333beeeeee445444444556111115119999994444444466156611
-11111111eeeeee1144444444ee87786e464446444644464446444644465556443b111113b111113beeeeee445411411556111115119999994444445465115651
-e555555eeeeeee11455ee554e8777786464446444644464446444644465556443b111113b111113beeee44445411411556111115111111114444444411661166
-e565656eeeeeee1145eeee54e8999c86e66666666666666666666660666666663b111113b111113beeee44445411411556111115111111114445444451561156
-e565656ee11111114eeeeee4e8999986444644464446444644464444444644463b111113b111113bee4444445411411556111115111111114444444466115615
-e565656eeeee5eee4eeeeee4e8577586e66666666666666666666660666666663b111113b111113bee4444445444444556111115111111114444444456516611
-e565656eee55555e4eeeeee4ee87786e44644464446444644464446444644464333333333333333b444444445666666556666665666666654544454411651156
-e555555ee6e6e6e64eeeeee4eee886ee446444644464446444644464446444645555555555555555444444445555555555555555666655564444444415665166
-eeeeeeee6eeeee6e44444445eee776ee7777777677777776eeeeeeeee55ee55eeee66eeeeeeeeeeee5444445e55eeeeee5555555e44fe44feeeeeee3eeeeeeee
-ee6666eee6eee6ee445445eeeee776ee76c76c7676c76c76eeeeeeee77777777eee99eeee8e88e8ee5444445e55eeeeee5555555e44fe44feeeeee3beeeeeeee
-e6cccc6eee6e6eee4545445eeee776ee76c76c7678c76876eeeeeeeee777777eee9999ee88ee3e88e9e445e9e55eeeeee5555555e44fe44feeeee3b3eeeeeeee
-6cccccc6eee6eeee4545446eeee776ee7777777688878886eeeeeeeeeeeeeeeeee9999eeee3e33eeeee445eee55eeeeee555555544444444eeeeb444eeeeeeee
-6cccccc6555555ee4545445eeee776ee76c76c7678376836eeeeeeeeeeeeeeeeeee99eeeeee33eeee5444445e55eeeeee5555555e44fe44feee3434466115615
-6cccccc67675555e454545eeeee776ee76c76c7676376c36eeeeeeeeeeeeeeeeeeeeeeeeee9999eee5444445e55eeeeee5555555e44fe44fee34444456516611
-e6cccc6e676555554555445eeee776ee777777764444444566666666eeeeeeeeeeeeeeeeee9999eee9e445e9e55eeeeee5555555e44fe44feb33444411651156
-ee6776ee767556654444446eeee776ee444444454444444566666666eeeeeeeeeeeeeeeeeee99eeeeee445eee55eeeeee5555555e44fe44fb444444415665166
-e777777e6765555544444444e55e555eeffffffffffffffffffffffe4eeeeeeeeeeeeeeeeeeeeeeeeee445ee6556eeeee5555665eeeeeeee3eeeeeee44444444
-77777777767556654556655422222222666ffffffffffffffffff6664666eeeeeeeeeeeeeeee88eeeee445eee55eeeeee5555555eeeeeeee4beeeeee44444444
-77777777555555554555555422222222666ffffffffffffffffff6664666eeeeeeeeeeeeeeee8eeeeee445eee55eeeeee555555555555555343eeeeee5ee5ee5
-777776675835555e4444444426555562666ffffffffffffffffff6664888888888888884e111815eeee445eee55eeeeee5555555eeeeeeee44b3eeee5e55e55e
-77777777444444444556655426666662effffffffffffffffffffffe488888888888888415518115eee445eee55eeeeee5555555eeeeeeee444bbeeeeeeeeeee
-77777777444444444555555426666662666ffffffffffffffffff666466666666666666415511115eee445eee55eeeeee5555555eeeeeeee444443eeeeeeeeee
-7777777745eeee544444444426666662666ffffffffffffffffff666444444444444444415511115eee445eee55eeeeee555555555555555444434beeeeeeeee
-e777777e4eeeeee44eeeeee422222222666ffffffffffffffffff6664eeeeee4eeeeeee415511115eee445eee55eeeeee5555555eeeeeeee44444443eeeeeeee
-8888888855555555e944449e3333333555555eee00000000eeeeeeeeeeeeeeeeeeeee0ee99999999e676765eeeeeeee66eeeeeeeeeee777eeeee777eeeee777e
-88888888511111159444444933333335504405ee00000000eeeeeeeeeeeeeeeeeeee0e0e99999999e676765eeeeeee6666eeeeeeee44707eee44707eee44707e
-77777777511111154444444433333335566665ee00000000eeeeeeeeeeeeeeeeeeee0e0e99999999e676765eeeeee667766eeeeee44477aae44477aae44477aa
-777777775111111555599555333333355440445e00000000eeeeeeeeeeeeeeeeeee66ee099999999e676765eeeee66677666eeee7664777e7664777e7664777e
-777777775111111544499444333333355666665e00000000eeeeeeeeeeeeeeeee88888e099999999e676765eeee6677777766eee7766477e7766477e7766477e
-777777775111117544444444333333355440440500000000eeeeeeeeeeeeeeeee88888e099999999e676765eee667777777766eee777477ee777477ee777477e
-777777775111177594444449333333355666666500000000eeeeeeeeeeeeeeeee87778e099999999e676765ee66777777777766eeeaeeaeeeeaeeeaaeeaaeaee
-777777775111777599444499333333355555555500000000eeeeeeeeeeeeeeeee87778e099999999e676765e6677777777777766eeaaeaaeeeaaeeeeeeeeeaae
-eeeeeeee5cc777c5777777777703307765eee096000000000000000000000000e88888e0444444444444444444444445eeee333eeeee333eeeee333eeeee333e
-eeeeeeee5177711533333333303bb3036555e996000000000000000000000000e85658e0455555555555555555555545eeee303eeeee3038eeee303eeeee3034
-eeeeeeee5777ccc5bbbbbbbb03baab3044444444000000000000000000000000e88888e04666666666666666666666453eee33883eee338eeeee3344eeee334e
-eeeeeeee577cccc5333333333ba77ab360e5e0e6000000000000000000000000e888886e4555555555555555555555453333333e333333387566777e75667774
-eeeeeeee57ccccc5bbbbbbbb3ba77ab3655e5336000000000000000000000000e88888ee46666666666666666666664573377733733777335666665e5666665e
-eeeeeeee5cccccc53333333303baab306555e116000000000000000000000000e55555ee455555555555555555555545e7777773e7777773e666655ee666655e
-888888885cccccc577777777303bb303444444440000000000000000000000005666665e466666666666666666666645ee77777eee77777eee4ee4eeee4ee4ee
-888888885555555577777777770330776eeeeee60000000000000000000000005555555e455555555555555555555545ee88e88eee88e88eee44e44eee44e44e
-6666665e9999999999999999eeeeeeeeeffffffffffffffffffffffffffffffffffffffe466666666666666666666645eeee555eeeee555eeeee777eeeee777e
-6666665e9999999999999999eeeeeeeeff78711811f555ffff55f5f5f5ff55f55fff55ff455555555555555555555545eeee305eeeee3057eeee707eeeee7078
-6666665e9999999999999999eeeeeeeeff88811111f555fff5f5ff5ff5f5f5f5f5f5ffff466666666666666666666645eeee3377eeee337eeeee7788eeee778e
-6666665e9999888888888888eeeeeeeeff78718181f5f5fff5f5ff5ff5f5f5f5f5f5f5ff4555555555555555555555450565623e056562377666777e76667778
-6666665e99988111781111788eeeeeeeff11111111f5f5f5f55ff5f5f5f55ff5f5f555ff4666666666666666666666455665622e5665622e7766777e7766777e
-6666665e998811771811771188eee555ff11111811ffffffffffffffffffffffffffffff455555555555555555555545e656666ee656666ee777777ee777777e
-6666665e9881771118171111188e555eff11111111f555f5f5ff55f5f55fff55f5f5ffff466666666666666666666645ee9ee9eeee9ee9eeee8ee8eeee8ee8ee
-6666665e8817111118711111118885eefffffffffff55fff5ff5f5fff5f5f5f5f5f5ffff455555555555555555555545ee99e99eee99e99eee88e88eee88e88e
-9998888888888888888888888888888eff55555555f5ffff5ff555f5f5f5f5f5f555ffff450000000000004500000000eeeee08eeeeee088eeeeeeeeeeeeeeee
-99aa881118888888888888881118889eff55777765f555f5f5f5fffff5f5f55ff555ffff450000000000004500000000eeeee088eeeee08eeeeeeeeeeeeeeeee
-99a8811111888888888888811111889eff55707065ffffffffffffffffffffffffffffff450000000000004500000000ee00001eee000018eeeeeeeeeeeeeeee
-9888111611188888888888111611188eff55777765ff55f555f5f5f5f5f5f555ff55ffff450000000000004500000000e000011ee000011eeeeeeeeeeeeeeeee
-98881167611888888888881167611885ff55799765f5fff55fff5ffff555f55ff5ffffff450000000000004500000000e700111ee700111eeeee44eeeeee44ee
-99881116111888888888881116111885ff55777765fff5f5ffff5ff5fff5f5fffff5ffff4500000000000045000000007e8ee8ee7e8ee8eeee44469eee44469e
-9999911111999999999999911111eeeeff57777776f55ff555f5f5fff55ff555f55fffff450000000000004500000000ee8ee8eeee8ee8eeeee666eeeee6669e
-999999111999999999999999111eeeeeeffffffffffffffffffffffffffffffffffffffe450000000000004500000000ee88e88eee88e88eeeee4eeeeeee4eee
+eee55eeeeeeeee1144444444eee886eeee66666666666666666666eeeee65eee333333333333333beeeeee445444444556111115119999994444444466156611
+11111111eeeeee1144444444ee87786ee4644644464446444644644eee6a65ee3b111113b111113beeeeee445411411556111115119999994444445465115651
+e555555eeeeeee11455ee554e8777786e4644644464446444644644ee6a0a65e3b111113b111113beeee44445411411556111115111111114444444411661166
+e565656eeeeeee1145eeee54e8999c86ee66666666666666666666eee6a0a65e3b111113b111113beeee44445411411556111115111111114445444451561156
+e565656ee11111114eeeeee4e8999986e4464446444644466444644e6aaaaa653b111113b111113bee4444445411411556111115111111114444444466115615
+e565656eeeee5eee4eeeeee4e8577586ee66666666666666666666ee6aa0aa653b111113b111113bee4444445444444556111115111111114444444456516611
+e565656eee55555e4eeeeee4ee87786ee4464464446444644464464e6aaaaa65333333333333333b444444445666666556666665666666654544454411651156
+e555555ee6e6e6e64eeeeee4eee886eee4464464446444644464464ee666665e5555555555555555444444445555555555555555666655564444444415665166
+eeeeeeee6eeeee6e44444445eee776ee7777777677777776eeeeeeeee55ee55eeee66eeeeeeeeeeee4444445e556eeeee5555556e44fe44feeeeeee3eeeeeeee
+ee6666eee6eee6ee445445eeeee776ee76c76c7676c76c76eeeeeeee77777777eeeaaeeee8e88e8ee4444445e556eeeee5555556e44fe44feeeeee3beeeeeeee
+e6cccc6eee6e6eee4545445eeee776ee76c76c7678c76876eeeeeeeee777777eeeaaaaee88ee3e88e9e445e9e556eeeee5555556e44fe44feeeee3b3eeeeeeee
+6cccccc6eee6eeee4545446eeee776ee7777777688878886eeeeeeeeeeeeeeeeeeaaaaeeee3e33eeeee445eee556eeeee555555644444444eeeeb444eeeeeeee
+6cccccc6555555ee4545445eeee776ee76c76c7678376836eeeeeeeeeeeeeeeeeeeaaeeeeee33eeee4444445e556eeeee5555556e44fe44feee3434466115615
+6cccccc67675555e454545eeeee776ee76c76c7676376c36eeeeeeeeeeeeeeeeeeeeeeeeee9999eee4444445e556eeeee5555556e44fe44fee34444456516611
+e6cccc6e676555554555445eeee776ee777777764444444566666666eeeeeeeeeeeeeeeeee9999eee9e445e9e556eeeee5555556e44fe44feb33444411651156
+ee6776ee767556654444446eeee776ee444444454444444566666666eeeeeeeeeeeeeeeeeee99eeeeee445eee556eeeee5555556e44fe44fb444444415665166
+e777777e6765555544444444e55e555eefffffff66666666fffffffe4eeeeeeeeeeeeeeeeeeeeeeeeee445ee75576eeee5557756eeeeeeee3eeeeeee44444444
+77777777767556654556655422222222666fffff65757576fffff6664666eeeeeeeeeeeeeeee88eeeee445eee556eeeee5555556eeeeeeee4beeeeee44444444
+77777777555555554555555422222222666fffff6937ad46fffff6664666eeeeeeeeeeeeeeee8eeeeee445eee556eeeee555555655555555343eeeeee5ee5ee5
+777776675835555e4444444426555562666fffff6937ad46fffff6664888888888888884e111815eeee445eee556eeeee5555556eeeeeeee44b3eeee5e55e55e
+77777777444444444556655426666662efffffff6937ad46fffffffe488888888888888415518115eee445eee556eeeee5555556eeeeeeee444bbeeeeeeeeeee
+77777777444444444555555426666662666fffff6937ad46fffff666466666666666666415511115eee445eee556eeeee5555556eeeeeeee444443eeeeeeeeee
+7777777745eeee544444444426666662666fffff69e7ede6fffff666444444444444444415511115eee445eee556eeeee555555655555555444434beeeeeeeee
+e777777e4eeeeee44eeeeee422222222666fffff0eeeeee0fffff6664eeeeee4eeeeeee415511115eee445eee556eeeee5555556eeeeeeee44444443eeeeeeee
+5cc7777555555555eeeeeeee3333333555555eee777777751111111111111111eeeee0eeeee070eeeee070eeeee555eeeee555eeeeee777eeeee777eeeee777e
+5cc7777551111115effffffe33333335504405ee7666675e1777777777777771eeee0e0eeee7aaaaeee7aaaaeee5056eeee5056eee44707eee44707eee44707e
+5c77777551111115f566f55f33333335566665ee75cc675e1111111111111111eeee0e0eeee7a999eee7aeeeee555566ee555566e44477aae44477aae44477aa
+5c77777551111115f566ffff333333355440445e7777775e1777777177777771eee66ee0ee77999eee779999ee55566eee5556ee7664777e7664777e7664777e
+5c77777551111175f566f67f333333355666665e74cc66751111111111111111e88888e0e07797eee077999ee555eeeee555ee6e7766477e7766477e7766477e
+5c7777c551111775f555f76f3333333554404405777777751777777777777771e88888e07707777e7707777e5555eeee5555eeeee777477ee777477ee777477e
+5c7777c55c117775ffffffff333333355666666570116c751111111111111111e87778e0007777ee007777ee555eeeee555eeeeeeeaeeaeeeeaeeeaaeeaaeaee
+5c7777c55cc77775e6eeee6e333333355555555577777775e6eeeeeeeeeeee6ee87778e0e799799ee799799e555eeeee555eeeeeeeaaeaaeeeaaeeeeeeeeeaae
+ee3eee3e5c7777c5777777777703307765eee096555555554444444444444444e88888e0555555550000000000000000eeee333eeeee333eeeee333eeeee333e
+3ee3e3ee57777cc533333333303bb3036555e99656111115e5eeeeeeeeeeee5ee85658e0666666660000000000000000eeee303eeeee3038eeee303eeeee3034
+e3e3e3ee5777ccc5bbbbbbbb03baab3044444444561111154444444444444444e88888e05555555500000000000000003eee33883eee338eeeee3344eeee334e
+ee3ee3e3577cccc5333333333ba77ab360e5e0e656111115e5eeeeeeeeeeee5ee888886e6666666600000000000000003333333e333333387566777e75667774
+3e3e3e3e57ccccc5bbbbbbbb3ba77ab3655e5336561771154444444444444444e88888ee55555555000000000000000073377733733777335666665e5666665e
+e3e3ee3e5cccccc53333333303baab306555e116567117156666666666666666e55555ee666666660000000000000000e7777773e7777773e666655ee666655e
+ee3333ee5cccccc577777777303bb30344444444571111756eeeeeeeeeeeeee65666665e555555550000000000000000ee77777eee77777eee4ee4eeee4ee4ee
+eee33eee5555555577777777770330776eeeeee6544444456eeeeeeeeeeeeee65555555e666666660000000000000000ee88e88eee88e88eee44e44eee44e44e
+e4444446eeeeeeeeeeeeeeeeeeeeeeee7871181154888845000000000000000000000000000000000000000000000000eeee555eeeee555eeeee777eeeee777e
+e4444446eeeeeeeeeeeeeeeeeeeeeeee8881111154444445000000000000000000000000000000000000000000000000eeee505eeeee5057eeee707eeeee7078
+ee44446eeeeeeeeeeeeeeeeeeeeeeeee7871818156111115000000000000000000000000000000000000000000000000eeee5577eeee557eeeee7788eeee778e
+ee44446eeeee888888888888eeeeeeee11111111561111150000000000000000000000000000000000000000000000000565233e056523377666777e76667778
+ee44446eeee88111781111788eeeeeee11111811561111150000000000000000000000000000000000000000000000005665622e5665622e7766777e7766777e
+ee44446eee8811771811771188eee5551111111156111115000000000000000000000000000000000000000000000000e656666ee656666ee777777ee777777e
+ee44446ee881771118171111188e555eeeeeeeee56666665000000000000000000000000000000000000000000000000ee9ee9eeee9ee9eeee8ee8eeee8ee8ee
+ee44446e8817111118711111118885eeeeeeeeee55555555000000000000000000000000000000000000000000000000ee99e99eee99e99eee88e88eee88e88e
+eee8888888888888888888888888888e555555550000000000000000000000000000000000000000eee040eeeee040eeeeeee08eeeeee088eeeeeeeeeeeeeeee
+eeaa881118888888888888881118889e557777650000000000000000000000000000000000000000eee44aaaeee44aaaeeeee088eeeee08eeeeeeeeeeeeeeeee
+eea8811111888888888888811111889e557070650000000000000000000000000000000000000000eee4a999eee4a4eeee00001eee000018eeeeeeeeeeeeeeee
+e888111611188888888888111611188e557777650000000000000000000000000000000000000000ee4444eeee444999e000011ee000011eeeeeeeeeeeeeeeee
+e8881167611888888888881167611885599977650000000000000000000000000000000000000000e544544ee544544ee700111ee700111eeeee44eeeeee449e
+ee8811161118888888888811161118855577776500000000000000000000000000000000000000004444444e4444444e7e8ee8ee7e8ee8eeee44469eee4446ee
+eeeee11111eeeeeeeeeeeee11111eeee577777760000000000000000000000000000000000000000544545ee544545eeee8ee8eeee8ee8eeeee666eeeee6669e
+eeeeee111eeeeeeeeeeeeeee111eeeee577777760000000000000000000000000000000000000000e499499ee499499eee88e88eee88e88eeeee4eeeeeee4eee
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -704,40 +1110,40 @@ eeeeeeee5cccccc53333333303baab306555e116000000000000000000000000e55555ee45555555
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000418090518090518090610000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000418191518191518191610000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000418191518191518191610000626262626262626262626262620000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000415151517151517151610000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000415151515151515151610000430000000000000000000000630000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000418090518090518090610000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000418090518090518090610000431414001414001414001414630000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000418191718191518191610000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000418191518191518191610000431515001515001515001515630000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000417151515151715151610000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000415151515151515151610000430000000000000000000000630000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000418090518090518090610000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000418090518090518090610000431414001414001414001414630000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000418191518191518191610000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000418191518191518191610000431515001515001515001515636262626262626262626200000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000006262626262626200415151715151517151610000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000006262626262626200415151515151515151610000430000000000000000000000000000000000000000006300000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000050000000004353535353536300418090518090518090610000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000004051600000004342535253426300418191518191518191610000000000005000000000000000000000000000000505050505050505
-05050505050500000000000000000000000000000000000000000094949494949494949494949494000000000000006200000000000000000000000000000000
-00000000000000000000407151516000004353535353536300415151515151715151610000000000405160000000000000000000000000000303030303030303
-03035353530600000000000000000000000000000000000000000094949494949494949494949494000000000000b400c4000000000000000000000000000000
-00000000000000000040515151715160004342534253526300418090518090518090610000000040514251600000000000000000000000000314141414141414
-1403531414060000000000000000000000000000000000000000009495a5a5a5a5a5a5b5941414940000000000b4000000c40000000000000000000000000000
-00000000000000000041809051809061004353535353536300418191518191518191610000004051515151516000000000000000000000000315151515151515
-1503531515060000000000000000002525253525252525252500009496a6a6a6a6a6a6b69415159400006262b40000000000c462620000000000000000000000
-00000000000000000041819151819161004352534253426300415151715151515151610000004142425142426100000000000000000000000303030303030303
-0303040404040400000000000000000032000000000000323400009496a6a6a6a6a6a6b6941414940000a400a400a400a400a400a40000000000000000000000
-00310000000000000041515171515161004353535353536300418090515171518090610000005151515151516100000000000000000000000314140303030314
-1403531414063200000000000000000032000000000000323400009496a6a6a6a6a6a6b6941515940000a414a414a400a414a414a40000000000000000000000
-0032000000000000004181b051818161004342b0425352630041819151c0c05181916100930041524251b04261000000000000000000000003151503c0c00315
-15035315150632000000000000000000328184818481c0323400009497000000000000a7949416263600a415a415a4c0a415a415a40000000000000000000000
-0032202020000000004171b151517161014353b1535353630041515151c1c15151516100d2d251515151b15151d20000000000000000000003030303c1c10303
-03035353530632000000000000000000320085008500c1323400009497000000000000a7940717273700a400a400a4c1a400a400a40000000000000000000000
+00000000000000000000000050000000004300000000006300418090518090518090610000431414001414001414001414000014140014140014146300000000
+00000000000000000000000000000000000000000000000000000062626262626262626262626262000000000000000000000000000000000000000000000000
+00000000000000000000004051600000004342005200426300418191518191518191610000431515001515001515001515000015150015150015156300000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000500000000000000000000000
+00000000000000000000405151516000004300000000006300415151515151515151610000430000000000000000000000000000000000000000006300000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040516000000000000000000000
+00000000000000000040515151515160004342004200526300418090518090518090610000431414001414001414001414000014140014140014146300000000
+00000000000000000000000000000000000000000000000000000000140095959595950000141400000000000000000000004051425160000000000000000000
+00000000000000000041809051809061004300000000006300418191518191518191610000431515001515001515001515000015150015150015156300000000
+00000000000000000000000000000025252535252525252525000000150095959595950000151500000000000000000000405151515151600000000000000000
+00000000000000000041819151819161004352004200426300415151515151515151610000436262626262626262626262620062626262626262626300000000
+00000000000000000000000000000000320000620000003234000000000095959595950000141400000000000000000000414242514242610000000000000000
+00310000000000000041515151515161004300000000006300418090515151518090610000433214141414141414141414320032141414141414326300000000
+00000000000000000000000000000000320000710000003234000000000095959595950000151500000000000000000000415151515151610000000000000000
+0032000000000000004181b051818161004342b0420052630041819151c0c051819161000043320404040404c0c004040432c232c0c004040404326300000000
+00000000000000000000000000000000328184818481c0323403000055000000000000000000162636000000000000930041524251b042610000000000000000
+0032657500000000004151b151515161014300b1000000630041515151c1c151515161000043321515151515c1c115151532c332c1c115151515326300000000
+00000000000000000000000000000000320085008500c1323403000056000000000000000007172737000000000000d2d241515151b15161d200000000000000
 d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0
 d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0
 d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1
@@ -745,10 +1151,10 @@ d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1
 e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1
 e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1
 __gff__
-0001010005090600000003000003030383010300838383830000000000030003000003000009090000000303000005010001030000000000000100030009060400000083000000000000000606000000000003030000000000000000000000000001010900000000000000000000000003030003000000000000000000000000
+0001010005090600000003004003030300010300838383000000000040030003000003000009090000000303000005010001030083008300000100030009060400000083000003030000000000000000000003030000010100000000000000000009010900000000000000000000000003030003000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001e1e1e1e1e1e1e1e1e0000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -759,29 +1165,42 @@ __map__
 000000000000000000000000000000000000000000000000001400002b032707270323000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000000000000000000000001400003b321023031223000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000153f000a0a0a0a0a0a16000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000000000000000000001400002c002700030023000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000000000000000000001400003c000200221123000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000f000000000000000015003f0a0a0a0a0a0a16000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000f00000000000000001400002b002700030023000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000f00000000000000001400003b000200221123000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000f0000000000000000143f000a0a0a0a0a0a16000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000f00000000000000001400002c202700272123000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000f00000000000000001400003c303202023123000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000f262626262626260014003f0a0a0a0a0a0a16000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000f34353535353536001400002b002700270023000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000000000000000000000000000000000f34032428242036001400003b020212020223000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000049494949494949494949494949000000000000002600000000000000000000000000000000
-000000000000000000000000000000000f3422373800323600143f000a0a0a0a0a0a160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000494949494949494949494949490000000000004b004c000000000000000000000000000000
-000000000000000000002a3d3d3d3d3d0f340a0a0a0a0a36001400002b002700030023000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000049595a5a5a5a5a5a5b4941414900000000004b0000004c0000000000000000000000000000
-030000000021000000003a00000000000f34292428241a36001400003b000200221123000000000000000000000000000000000000000000000000000000000000000000000000000000000000000052525253525252525252000049696a6a6a6a6a6a6b49515149000026264b00000000004c26260000000000000000000000
-121100010031000000002300000000000f343033121a0a360014003f0a0a0a0a0a0a16000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234300000000000043000049696a6a6a6a6a6a6b4941414900004a0000000000000000004a0000000000000000000000
-0e0e0e0e0e0e3e0039003a00000013000f340a0a0a0a0a360014000027000027000023000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000234300000000000043000049696a6a6a6a6a6a6b4951514900004a0000000000000000004a0000000000000000000000
-1e1e1e1e1e1e1e3e23003a00000023000f34282421241a3600140000000c0c000000230000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002343440026000c5443000049790000000000007a4949616200004a42002b290c002626264a0000000000000000000000
-1e1e1e1e1e1e1e1e0e3e3a00020223000f343700311a0a3600143f00101c1c002211160000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002343430243001c5443000049790000000000007a4970717200004a12423b121c023211324a0000000000000000000000
-1e1e1e1e1e1e1e1e1e1e0e0e0e0e0e0e0e0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d
+000000000000000000000000000000000000000000000000001400002b002700030023000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000001400003b000200221123000026262626262626262626262626000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f000000000000000015003f0a0a0a0a0a0a16000034000000000000000000000036000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f00000000000000001400002b002700030023000034000000000000000000000036000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f00000000000000001400003b000200221123000034000000000000000000000036000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f0000000000000000143f000a0a0a0a0a0a16000034000000000000000000000036000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f00000000000000001400002c202700272123000034003f0a0a0a0a0a0a0a0a0a36000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f00000000000000001400003c303202023123000034000023270027002700270036262626262626262626260000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f262626262626260014003f0a0a0a0a0a0a1600003400002854422000305403002b000000003000302020360000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f34032428242036001400002b00270027002300003400000246473233305436023b002211113002303232360000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f34223738073236001400003b0202120202230000343f000a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a36000000000000000000000000000000000000000000000000000000000000000a0a0a0a0a0a0a0a0a0a0a0a0a000000000000000000000000000000000000000000000000
+000000000000000000000000000000000f340a0a0a0a0a3600143f000a0a0a0a0a0a1600003400005454275435540027000a000a0027000a00270036000000000000000000000000000000000000000000000000000000000000000a002300000023000a0028000a000000000000000000000000000000000000000000000000
+00000000000000000000002a3d3d3d3d0f34292428241a36001400002b00270003002300003400003535413535540003000a002c0042002b00420036000000000000000000000000000000000000000000000000000000000000000a002300000023000a0000420a000000000000000000000000000000000000000000000000
+00030000000021000000003a000000000f343033121a0a36001400003b00020022112300003400003535513535540036020a003c0212113b02121136000000000000000000000000000000000000005252525352525252525200000a002800000028000a0202300a000000000000000000000000000000000000000000000000
+001211000100310000000023000000000f340a0a0a0a0a360014003f0a0a0a0a0a0a16000034003f0a0a0a0a0a0a0a0a0a0a000a0a0a0a0a0a0a0a36000000000000000000000000000000000000000023430027070727074300000a000000000026260a0a0a0a0a000000000000000000000000000000000000000000000000
+0e0e0e0e0e0e0e3e0039003a000000130f34282400242836001400002700002700002300003400000000000000000000000a00270027002700270036000000000000000000000000000000000000000023430000545400544300000a000000000017000a2800280a000000000000000000000000000000000000000000000000
+1e1e1e1e1e1e1e1e3e23003a000000230f34002421241a3600140000000c0c000000230000340000500000500c0c5000000a00500c0c45200000003600000000000000000000000000000000000000002343440054540c544300000a0c0000000048002c0026260a000000000000000000000000000000000000000000000000
+1e1e1e1e1e1e1e1e1e0e3e3a005657230f343707311a323600143f00101c1c002211160000343f00600000601c1c6000100a3f601c1c45450045023600000000000000000000000000000000000000002343570243541c544300000a1c0033464758003c0000000a000000000000000000000000000000000000000000000000
+1e1e1e1e1e1e1e1e1e1e1e0e0e0e0e0e0e0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d
 1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d
 1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e1e
 __sfx__
 001000001505015050170501a0501c0001c0501f05021050210001f0501c0501a050180501a0501c0501d0001a0501a0501a0501c0501c0501c05018050180501805026000180502d00018050180000000000000
+0000000011110161201a1201c1201f1202112022120201201a120131200e120091200512003120011300010000100001000010000100021000110000100081000610005100041000310003100031000310003100
+000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+112000001005015055150551505517050180551805518055150501305513055130551005013055000000000010050150551505515055170501805518055180551a0501c0551c0551c055180501c0550000000000
+012000001c050210552105521055210501c0551c0551c0551c0501805518055180551805015050000000000015050110551105511055110551805518055180551805500000000001800518055180551505515055
+30200000070551505500000150550000015055000001505500000090550000009055000001c0551c0551c055210052d057210572d057210572d057210572d0570000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000001505015050170501a0501c0001c0501f05021050210001f0501c0501a050180501a0501c0501d0001805018050180501c0501c0501c0501f0501f0501f05026000180502d00018050180000000000000
 001000001505015050170501a0501c0001c0501f05021050210001f0501c0501a050180501a0501c0501d0001a0501c0501f0501c0501a0501c0501c0501d0501c05026000180502d00018050180000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -831,20 +1250,70 @@ __sfx__
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-002000001885000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+002000001895000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __music__
-04 00014344
+01 000e4344
+01 03444344
+01 044f4344
+04 054f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
+00 4e4f4344
 
