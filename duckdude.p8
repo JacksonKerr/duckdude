@@ -1,5 +1,5 @@
 pico-8 cartridge // http://www.pico-8.com
-version 42
+version 43
 __lua__
 -- init & utils
 local evnt_q={}
@@ -27,6 +27,10 @@ function _init()
 	mvmt=true
 	show_plr=true
 	bus_enabled=false
+	in_dialog=function() 
+		return dlg_npc!=nil
+	end
+	
 	fly_hack=true
 	has_backpack=false
 	
@@ -256,18 +260,24 @@ end
 function upd_plr(o) 
 	handle_dx(o) 
 	handle_dy(o)
-		 
-	if btn(❎) and not prev_io.❎
+	
+	if not prev_io.🅾️ and btn(🅾️)
+	and not in_dialog() then	
+		 if (indr_tog(o)) return 
+	end
+	if btn(🅾️) and not prev_io.🅾️
 		then next_dialog(o) end
 		
 	movey(o.dy,o)
 end	
 
 function handle_dx(o) 
-	if mvmt and btn(➡️) then
+	if mvmt and btn(➡️)
+	and not in_dialog() then
 		if (o.x_accel > o.dx) o.dx=0
 		if (o.dx<o.vmax) o.dx+=o.x_accel
-	elseif mvmt and btn(⬅️) then
+	elseif mvmt and btn(⬅️) 
+	and not in_dialog() then
 		if (-o.x_accel < o.dx) o.dx=0
 		if (o.dx>-o.vmax) o.dx-=o.x_accel
 	else
@@ -283,12 +293,11 @@ function handle_dy(o)
 	if (o.grounded) o.dy=0.001 
 
 	if (not mvmt) return
-	if btn(⬆️) 
+	if btn(❎) 
 		and (o.grounded or fly_hack)
-		and not prev_io.⬆️
+		and not prev_io.❎
+		and not in_dialog()
 		then	o.dy=o.jump_accel	end
-	if not prev_io.🅾️ and btn(🅾️)
-		 then	indr_tog(o) end
 end
 
 --transition
@@ -329,9 +338,10 @@ function indr_tog(o)
 						)
 					end
 				)
+				return true
 			end
 		)
-		return
+		return false
 	end
 	
 	-- center point of object
